@@ -289,8 +289,8 @@ void SimpleSerial::parseAndPostMessage() {
     if (m_rx_count < 2) return;  // 至少需要source和length两个字节
     
     SerialMessage msg;
-    msg.source = (uint8_t)m_rx_buffer[0];
-    msg.length = (uint8_t)m_rx_buffer[1];
+    msg.source = (uint8_t)m_rx_buffer[m_rx_index];
+    msg.length = (uint8_t)m_rx_buffer[m_rx_index + 1];
     
     // 检查消息长度是否有效（最大254字节，因为data数组是254）
     if (msg.length > 254 || m_rx_count < (2 + msg.length)) {
@@ -300,7 +300,7 @@ void SimpleSerial::parseAndPostMessage() {
     
     // 复制数据
     for (uint8_t i = 0; i < msg.length; i++) {
-        msg.data[i] = (uint8_t)m_rx_buffer[2 + i];
+        msg.data[i] = (uint8_t)m_rx_buffer[m_rx_index + 2 + i];
     }
     
     // 投递事件到全局事件队列

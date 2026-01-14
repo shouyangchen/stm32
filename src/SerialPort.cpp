@@ -79,14 +79,16 @@ void SimpleSerial::initGPIO() {
             GPIO_InitStructure. GPIO_Mode = GPIO_Mode_AF_PP;
             // ✅ 参数验证：检查GPIO模式
             if (!validate_gpio_mode(GPIO_InitStructure.GPIO_Mode)) {
-                return;  // 配置无效，退出
+                m_usart = nullptr;  // 配置无效，清除USART指针
+                return;
             }
             GPIO_Init(GPIOA, &GPIO_InitStructure);
 
             GPIO_InitStructure.GPIO_Pin = GPIO_Pin_10;
             GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
             if (!validate_gpio_mode(GPIO_InitStructure.GPIO_Mode)) {
-                return;  // 配置无效，退出
+                m_usart = nullptr;
+                return;
             }
             GPIO_Init(GPIOA, &GPIO_InitStructure);
             break;
@@ -100,6 +102,7 @@ void SimpleSerial::initGPIO() {
             GPIO_InitStructure.GPIO_Pin = GPIO_Pin_2;
             GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_PP;
             if (!validate_gpio_mode(GPIO_InitStructure.GPIO_Mode)) {
+                m_usart = nullptr;
                 return;
             }
             GPIO_Init(GPIOA, &GPIO_InitStructure);
@@ -107,6 +110,7 @@ void SimpleSerial::initGPIO() {
             GPIO_InitStructure.GPIO_Pin = GPIO_Pin_3;
             GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
             if (!validate_gpio_mode(GPIO_InitStructure.GPIO_Mode)) {
+                m_usart = nullptr;
                 return;
             }
             GPIO_Init(GPIOA, &GPIO_InitStructure);
@@ -121,6 +125,7 @@ void SimpleSerial::initGPIO() {
             GPIO_InitStructure.GPIO_Pin = GPIO_Pin_10;
             GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_PP;
             if (!validate_gpio_mode(GPIO_InitStructure.GPIO_Mode)) {
+                m_usart = nullptr;
                 return;
             }
             GPIO_Init(GPIOB, &GPIO_InitStructure);
@@ -128,15 +133,22 @@ void SimpleSerial::initGPIO() {
             GPIO_InitStructure.GPIO_Pin = GPIO_Pin_11;
             GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
             if (!validate_gpio_mode(GPIO_InitStructure.GPIO_Mode)) {
+                m_usart = nullptr;
                 return;
             }
             GPIO_Init(GPIOB, &GPIO_InitStructure);
             break;
+            
+        default:
+            // ✅ 无效的USART_ID，不应该发生
+            m_usart = nullptr;
+            return;
     }
     
-    // ✅ 参数验证：确认USART实例已正确设置
+    // ✅ 参数验证：最终确认USART实例有效
+    // 这是一个防御性检查，确保switch语句正确执行
     if (!validate_usart_instance(m_usart)) {
-        m_usart = nullptr;  // 设置为空，防止后续错误使用
+        m_usart = nullptr;
     }
 }
 

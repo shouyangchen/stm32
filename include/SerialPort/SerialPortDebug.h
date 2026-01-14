@@ -10,10 +10,14 @@
 
 #include "stm32f10x.h"
 #include <stdint.h>
+#include <stdbool.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+// 调试输出超时常数（循环次数，实际时间取决于CPU频率）
+#define SERIAL_DEBUG_TIMEOUT 10000
 
 // 简单的调试输出函数（使用轮询方式发送，不依赖DMA）
 static inline void serial_debug_putchar(USART_TypeDef* usart, char c) {
@@ -21,7 +25,7 @@ static inline void serial_debug_putchar(USART_TypeDef* usart, char c) {
     if (!(usart->CR1 & USART_CR1_UE)) return;  // USART未启用
     
     // 等待发送缓冲区空，带超时保护
-    uint32_t timeout = 10000;
+    uint32_t timeout = SERIAL_DEBUG_TIMEOUT;
     while (!(usart->SR & USART_SR_TXE) && timeout--);
     if (timeout > 0) {
         usart->DR = c;
@@ -63,30 +67,24 @@ static inline void serial_debug_print_dec(USART_TypeDef* usart, uint32_t num) {
 }
 
 // 参数验证函数
-static inline int validate_baudrate(uint32_t baud) {
+static inline bool validate_baudrate(uint32_t baud) {
     // STM32F103常用波特率范围：300 - 921600
     // 实际最大波特率取决于时钟频率，这里使用保守值
-    if (baud < 300 || baud > 921600) {
-        return 0;  // 无效
-    }
-    return 1;  // 有效
+    return (baud >= 300 && baud <= 921600);
 }
 
-static inline int validate_usart_instance(USART_TypeDef* usart) {
+static inline bool validate_usart_instance(USART_TypeDef* usart) {
     // 验证USART实例指针是否为有效的USART外设地址
-    if (usart == USART1 || usart == USART2 || usart == USART3) {
-        return 1;  // 有效
-    }
-    return 0;  // 无效
+    return (usart == USART1 || usart == USART2 || usart == USART3);
 }
 
-static inline int validate_gpio_speed(GPIOSpeed_TypeDef speed) {
+static inline bool validate_gpio_speed(GPIOSpeed_TypeDef speed) {
     return (speed == GPIO_Speed_10MHz || 
             speed == GPIO_Speed_2MHz || 
             speed == GPIO_Speed_50MHz);
 }
 
-static inline int validate_gpio_mode(GPIOMode_TypeDef mode) {
+static inline bool validate_gpio_mode(GPIOMode_TypeDef mode) {
     return (mode == GPIO_Mode_AIN ||
             mode == GPIO_Mode_IN_FLOATING ||
             mode == GPIO_Mode_IPD ||

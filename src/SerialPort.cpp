@@ -45,6 +45,10 @@ void SimpleSerial:: init(uint32_t baud) {
 }
 
 void SimpleSerial::initGPIO() {
+    // ✅ 修复：必须在配置 GPIO 之前启用 AFIO 时钟
+    // AFIO 时钟必须先于任何复用功能 GPIO 配置启用
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE);
+    
     GPIO_InitTypeDef GPIO_InitStructure;
     GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
 
@@ -94,15 +98,6 @@ void SimpleSerial::initGPIO() {
             GPIO_Init(GPIOB, &GPIO_InitStructure);
             break;
     }
-
-    // ✅ 关键：启用 AFIO，但在之后恢复 GPIO 配置
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE);
-    
-    // ✅ 修复：禁用 TIM3 重映射，确保 PB0 上的舵机能正常工作
-    // USART3 默认使用 PB10/PB11，不需要重映射
-    // 但启用 AFIO 后必须明确禁用 TIM3 重映射
-    GPIO_PinRemapConfig(GPIO_PartialRemap_TIM3, DISABLE);
-    GPIO_PinRemapConfig(GPIO_FullRemap_TIM3, DISABLE);
 }
 
 void SimpleSerial::initUSART(uint32_t baud) {

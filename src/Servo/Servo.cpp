@@ -31,6 +31,14 @@ Servo:: Servo(TIM_TypeDef* timer, Channel channel, GPIO_TypeDef* gpio, uint16_t 
 // ✅ 新增函数
 void Servo::enableAFIOClock() {
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE);
+    
+    // ✅ 修复：确保 TIM3 使用默认引脚映射（禁用任何重映射）
+    // TIM3 默认映射: CH1=PA6, CH2=PA7, CH3=PB0, CH4=PB1
+    // 这对于 PB0 上的舵机至关重要
+    if (timer_m == TIM3) {
+        GPIO_PinRemapConfig(GPIO_PartialRemap_TIM3, DISABLE);
+        GPIO_PinRemapConfig(GPIO_FullRemap_TIM3, DISABLE);
+    }
 }
 
 void Servo::enableGPIOClock(GPIO_TypeDef* gpio) {

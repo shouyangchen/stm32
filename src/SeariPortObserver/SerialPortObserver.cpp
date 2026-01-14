@@ -1,139 +1,100 @@
-// //
-// // Created by chenshouyang on 2026/1/12.
-// //
 //
-// #include "SeariPortObserver/SerialPortObserver.h"
-// #include "SerialPort/SerialPort.h"
+// Created by chenshouyang on 2026/1/12.
 //
-// Observer::Observer(const uint8_t &priority, Object* parent)
-//     : Object(parent, ObjectType::Observer)
-//     , priority_m(priority) {
-// }
-//
-// const uint8_t &Observer::getPriority() const {
-//     return this->priority_m;
-// }
-//
-// void Observer::event(Event *event) {
-//     Object::event(event);
-// }
-//
-// SerialPortObserver::SerialPortObserver()
-//     : Object(nullptr, ObjectType::SerialPortObserver) {
-// }
-//
-// void SerialPortObserver::event(Event *event) {
-//     Object::event(event);
-// }
-//
-// void SerialPortObserver:: registerSerialPort(SerialPortId portId, SerialPortPtr port) {
-//     if (port) {
-//         m_serialPorts[portId] = port;
-//         port->m_observer = this;
-//     }
-// }
-//
-// void SerialPortObserver:: unregisterSerialPort(SerialPortId portId) {
-//     auto it = m_serialPorts. find(portId);
-//     if (it != m_serialPorts.end()) {
-//         if (it->second) {
-//             it->second->m_observer = nullptr;
-//         }
-//         m_serialPorts.erase(it);
-//     }
-// }
-//
-// bool SerialPortObserver::getSerialPortState(SerialPortId portId) const {
-//     auto it = m_serialPorts.find(portId);
-//     if (it != m_serialPorts.end() && it->second) {
-//         return it->second->messageReady();
-//     }
-//     return false;
-// }
-//
-// void SerialPortObserver::deleteObserver(const Observer *observer,
-//                                        SerialPortId portId,
-//                                        MessageSource source) {
-//     if (! observer) return;
-//
-//     ObserverKey key{portId, source};
-//     auto observerQueue = ObserverPriority_queue.find(key);
-//
-//     if (observerQueue != ObserverPriority_queue. end()) {
-//         std::priority_queue<Observer*, std::vector<Observer*, ::allocator<Observer*>>, ObserverCompare> tempQueue;
-//
-//         while (!observerQueue->second.empty()) {
-//             auto it = observerQueue->second.top();
-//             if (it != observer) {
-//                 tempQueue. push(it);
-//             }
-//             observerQueue->second.pop();
-//         }
-//
-//         observerQueue->second = std::move(tempQueue);
-//     }
-// }
-//
-// void SerialPortObserver:: notifyObservers() {
-//     for (auto& [portId, port] : m_serialPorts) {
-//         if (port && port->messageReady()) {
-//             auto messageSource = port->getMessageSource();
-//             if (messageSource != MessageSource::NONE) {
-//                 notify(portId, messageSource);
-//             }
-//         }
-//     }
-// }
-//
-// void SerialPortObserver::notifyQueueElements(SerialPortId portId, MessageSource source) {
-//     ObserverKey key{portId, source};
-//     auto observerQueue = ObserverPriority_queue.find(key);
-//
-//     if (observerQueue != ObserverPriority_queue.end() && !observerQueue->second. empty()) {
-//         auto portIt = m_serialPorts.find(portId);
-//         if (portIt == m_serialPorts.end() || ! portIt->second) {
-//             return;
-//         }
-//
-//         auto port = portIt->second;
-//         const auto& message = port->getMessage(source);
-//
-//         if (message.source == MessageSource::NONE) {
-//             return;
-//         }
-//
-//         const uint8_t* data = message.data_ptr();
-//         size_t dataSize = message.size();
-//
-//         auto tempQueue = observerQueue->second;
-//
-//         while (!tempQueue.empty()) {
-//             auto observerObject = tempQueue.top();
-//             if (observerObject) {
-//                 observerObject->processSerialData(data, dataSize);
-//             }
-//             tempQueue.pop();
-//         }
-//     }
-// }
-//
-// void SerialPortObserver::notify(SerialPortId portId, MessageSource source) {
-//     notifyQueueElements(portId, source);
-// }
-//
-// void SerialPortObserver:: installObserver(const Observer *observer,
-//                                          SerialPortId portId,
-//                                          MessageSource source) {
-//     if (!observer) return;
-//
-//     ObserverKey key{portId, source};
-//     auto it = ObserverPriority_queue.find(key);
-//
-//     if (it != ObserverPriority_queue.end()) {
-//         it->second.push(const_cast<Observer *>(observer));
-//     } else {
-//         std::priority_queue<Observer*, std::vector<Observer*, ::allocator<Observer*>>, ObserverCompare> newQueue;
-//         newQueue.push(const_cast<Observer *>(observer));
-//         ObserverPriority_queue. insert_or_assign(key, std::move(newQueue));
-//     }
-// }
+
+#include "SeariPortObserver/SerialPortObserver.h"
+#include "Applications.h"
+
+// SerialObserver 实现
+SerialObserver::SerialObserver(uint8_t priority, Object* parent)
+    : Object(parent, ObjectType::Observer)
+    , priority_m(priority) {
+}
+
+uint8_t SerialObserver::getPriority() const {
+    return this->priority_m;
+}
+
+void SerialObserver::event(Event *event) {
+    if (event->getEventType() == Event::EventType_SerialProtReceive) {
+        // 处理串口接收事件
+        SerialReceiveEvent* serialEvt = static_cast<SerialReceiveEvent*>(event);
+        processSerialData(serialEvt->port_id, 
+                         serialEvt->message.source,
+                         serialEvt->message.data,
+                         serialEvt->message.length);
+    }
+    Object::event(event);
+}
+
+// SerialPortObserver 实现
+SerialPortObserver::SerialPortObserver()
+    : Object(nullptr, ObjectType::SerialPortObserver) {
+}
+
+void SerialPortObserver::event(Event *event) {
+    if (event->getEventType() == Event::EventType_SerialProtReceive) {
+        // 接收到串口消息事件，分发给相关观察者
+        SerialReceiveEvent* serialEvt = static_cast<SerialReceiveEvent*>(event);
+        dispatchMessage(serialEvt->port_id,
+                       serialEvt->message.source,
+                       serialEvt->message.data,
+                       serialEvt->message.length);
+    }
+    Object::event(event);
+}
+
+void SerialPortObserver::registerObserver(SerialObserver* observer, uint8_t portId, uint8_t messageSource) {
+    if (!observer) return;
+
+    ObserverKey key{portId, messageSource};
+    auto it = m_observers.find(key);
+
+    if (it != m_observers.end()) {
+        it->second.push(observer);
+    } else {
+        std::priority_queue<SerialObserver*, std::vector<SerialObserver*, ::allocator<SerialObserver*>>, ObserverCompare> newQueue;
+        newQueue.push(observer);
+        m_observers.insert({key, std::move(newQueue)});
+    }
+}
+
+void SerialPortObserver::unregisterObserver(SerialObserver* observer, uint8_t portId, uint8_t messageSource) {
+    if (!observer) return;
+
+    ObserverKey key{portId, messageSource};
+    auto it = m_observers.find(key);
+
+    if (it != m_observers.end()) {
+        // 重建队列，排除要删除的观察者
+        std::priority_queue<SerialObserver*, std::vector<SerialObserver*, ::allocator<SerialObserver*>>, ObserverCompare> tempQueue;
+
+        while (!it->second.empty()) {
+            auto obs = it->second.top();
+            if (obs != observer) {
+                tempQueue.push(obs);
+            }
+            it->second.pop();
+        }
+
+        it->second = std::move(tempQueue);
+    }
+}
+
+void SerialPortObserver::dispatchMessage(uint8_t portId, uint8_t source, const uint8_t* data, uint8_t len) {
+    ObserverKey key{portId, source};
+    auto it = m_observers.find(key);
+
+    if (it != m_observers.end() && !it->second.empty()) {
+        // 创建临时队列的副本，这样可以遍历所有观察者
+        auto tempQueue = it->second;
+
+        while (!tempQueue.empty()) {
+            auto observer = tempQueue.top();
+            if (observer) {
+                observer->processSerialData(portId, source, data, len);
+            }
+            tempQueue.pop();
+        }
+    }
+}

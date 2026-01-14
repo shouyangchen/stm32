@@ -1,4 +1,5 @@
 #include "SerialPort/SerialPort.h"
+#include "SerialPort/SerialPortDebug.h"
 #include "Applications.h"
 
 // 全局实例
@@ -12,7 +13,16 @@ SimpleSerial::SimpleSerial(USART_ID id, uint32_t baud)
     , m_rx_index(0)
     , m_rx_count(0)
     , m_tx_in_progress(false)
+    , m_usart(nullptr)
+    , m_dma_tx(nullptr)
+    , m_dma_rx(nullptr)
 {
+    // ✅ 参数验证：检查波特率有效性
+    // 如果波特率无效，自动使用安全的默认值115200，确保初始化不会失败
+    if (!validate_baudrate(baud)) {
+        baud = 115200;
+    }
+    
     init(baud);
 
     // 注册全局指针
@@ -51,6 +61,12 @@ void SimpleSerial::initGPIO() {
     
     GPIO_InitTypeDef GPIO_InitStructure;
     GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+    
+    // ✅ 参数验证：检查GPIO速度配置
+    if (!validate_gpio_speed(GPIO_InitStructure.GPIO_Speed)) {
+        // GPIO速度配置无效，但这不应该发生
+        GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+    }
 
     switch (m_id) {
         case USART_ID:: USART1_ID:
@@ -61,10 +77,19 @@ void SimpleSerial::initGPIO() {
             // TX:  PA9, RX: PA10
             GPIO_InitStructure.GPIO_Pin = GPIO_Pin_9;
             GPIO_InitStructure. GPIO_Mode = GPIO_Mode_AF_PP;
+            // ✅ 参数验证：检查GPIO模式
+            if (!validate_gpio_mode(GPIO_InitStructure.GPIO_Mode)) {
+                m_usart = nullptr;  // 配置无效，清除USART指针
+                return;
+            }
             GPIO_Init(GPIOA, &GPIO_InitStructure);
 
             GPIO_InitStructure.GPIO_Pin = GPIO_Pin_10;
             GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
+            if (!validate_gpio_mode(GPIO_InitStructure.GPIO_Mode)) {
+                m_usart = nullptr;
+                return;
+            }
             GPIO_Init(GPIOA, &GPIO_InitStructure);
             break;
 
@@ -76,10 +101,18 @@ void SimpleSerial::initGPIO() {
             // TX: PA2, RX:  PA3
             GPIO_InitStructure.GPIO_Pin = GPIO_Pin_2;
             GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_PP;
+            if (!validate_gpio_mode(GPIO_InitStructure.GPIO_Mode)) {
+                m_usart = nullptr;
+                return;
+            }
             GPIO_Init(GPIOA, &GPIO_InitStructure);
 
             GPIO_InitStructure.GPIO_Pin = GPIO_Pin_3;
             GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
+            if (!validate_gpio_mode(GPIO_InitStructure.GPIO_Mode)) {
+                m_usart = nullptr;
+                return;
+            }
             GPIO_Init(GPIOA, &GPIO_InitStructure);
             break;
 
@@ -91,16 +124,45 @@ void SimpleSerial::initGPIO() {
             // TX: PB10, RX: PB11
             GPIO_InitStructure.GPIO_Pin = GPIO_Pin_10;
             GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_PP;
+            if (!validate_gpio_mode(GPIO_InitStructure.GPIO_Mode)) {
+                m_usart = nullptr;
+                return;
+            }
             GPIO_Init(GPIOB, &GPIO_InitStructure);
 
             GPIO_InitStructure.GPIO_Pin = GPIO_Pin_11;
             GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
+            if (!validate_gpio_mode(GPIO_InitStructure.GPIO_Mode)) {
+                m_usart = nullptr;
+                return;
+            }
             GPIO_Init(GPIOB, &GPIO_InitStructure);
             break;
+            
+        default:
+            // ✅ 无效的USART_ID，不应该发生
+            m_usart = nullptr;
+            return;
+    }
+    
+    // ✅ 参数验证：最终确认USART实例有效
+    // 这是一个防御性检查，确保switch语句正确执行
+    if (!validate_usart_instance(m_usart)) {
+        m_usart = nullptr;
     }
 }
 
 void SimpleSerial::initUSART(uint32_t baud) {
+    // ✅ 参数验证：确保USART实例有效
+    if (!m_usart || !validate_usart_instance(m_usart)) {
+        return;  // USART实例无效，无法初始化
+    }
+    
+    // ✅ 参数验证：再次检查波特率
+    if (!validate_baudrate(baud)) {
+        baud = 115200;  // 使用默认安全值
+    }
+    
     USART_InitTypeDef USART_InitStructure;
     USART_InitStructure.USART_BaudRate = baud;
     USART_InitStructure. USART_WordLength = USART_WordLength_8b;
@@ -108,6 +170,22 @@ void SimpleSerial::initUSART(uint32_t baud) {
     USART_InitStructure.USART_Parity = USART_Parity_No;
     USART_InitStructure.USART_HardwareFlowControl = USART_HardwareFlowControl_None;
     USART_InitStructure.USART_Mode = USART_Mode_Rx | USART_Mode_Tx;
+    
+    // ✅ 参数验证：检查USART配置参数
+    // WordLength应该是8b或9b
+    if (USART_InitStructure.USART_WordLength != USART_WordLength_8b &&
+        USART_InitStructure.USART_WordLength != USART_WordLength_9b) {
+        USART_InitStructure.USART_WordLength = USART_WordLength_8b;
+    }
+    
+    // StopBits应该是有效值
+    if (USART_InitStructure.USART_StopBits != USART_StopBits_1 &&
+        USART_InitStructure.USART_StopBits != USART_StopBits_0_5 &&
+        USART_InitStructure.USART_StopBits != USART_StopBits_2 &&
+        USART_InitStructure.USART_StopBits != USART_StopBits_1_5) {
+        USART_InitStructure.USART_StopBits = USART_StopBits_1;
+    }
+    
     USART_Init(m_usart, &USART_InitStructure);
 
     // 启用 DMA
@@ -117,9 +195,28 @@ void SimpleSerial::initUSART(uint32_t baud) {
     USART_ITConfig(m_usart, USART_IT_IDLE, ENABLE);
 
     USART_Cmd(m_usart, ENABLE);
+    
+    // ✅ 调试日志：输出初始化参数（初始化完成后）
+    // 短暂延迟确保USART完全就绪（约1ms @ 72MHz）
+    static const uint32_t USART_INIT_DELAY_LOOPS = 1000;
+    for (volatile uint32_t i = 0; i < USART_INIT_DELAY_LOOPS; i++);
+    
+    serial_debug_print(m_usart, "\r\n=== USART Init ===\r\n");
+    serial_debug_print(m_usart, "USART: ");
+    if (m_usart == USART1) serial_debug_print(m_usart, "USART1");
+    else if (m_usart == USART2) serial_debug_print(m_usart, "USART2");
+    else if (m_usart == USART3) serial_debug_print(m_usart, "USART3");
+    serial_debug_print(m_usart, "\r\nBaudrate: ");
+    serial_debug_print_dec(m_usart, baud);
+    serial_debug_print(m_usart, "\r\n==================\r\n");
 }
 
 void SimpleSerial::initDMA() {
+    // ✅ 参数验证：确保USART实例有效
+    if (!m_usart || !validate_usart_instance(m_usart)) {
+        return;  // USART实例无效，无法配置DMA
+    }
+    
     RCC_AHBPeriphClockCmd(RCC_AHBPeriph_DMA1, ENABLE);
 
     DMA_InitTypeDef DMA_InitStructure;
@@ -143,6 +240,17 @@ void SimpleSerial::initDMA() {
             m_dma_tx = nullptr;  // 不用 DMA 发送
             m_dma_rx = DMA1_Channel3;
             break;
+            
+        default:
+            // ✅ 无效的USART_ID，不应该发生
+            m_dma_tx = nullptr;
+            m_dma_rx = nullptr;
+            return;
+    }
+    
+    // ✅ 参数验证：确保DMA RX通道已正确分配
+    if (!m_dma_rx) {
+        return;  // DMA RX通道无效
     }
 
     // 配置 RX DMA（循环接收）
@@ -158,6 +266,13 @@ void SimpleSerial::initDMA() {
     DMA_InitStructure.DMA_Mode = DMA_Mode_Circular;  // ✅ 循环模式
     DMA_InitStructure.DMA_Priority = DMA_Priority_Low;  // ✅ 低优先级，不影响舵机
     DMA_InitStructure.DMA_M2M = DMA_M2M_Disable;
+    
+    // ✅ 参数验证：检查DMA配置参数
+    if (DMA_InitStructure.DMA_BufferSize == 0 || 
+        DMA_InitStructure.DMA_BufferSize > 65535) {
+        return;  // 缓冲区大小无效
+    }
+    
     DMA_Init(m_dma_rx, &DMA_InitStructure);
     DMA_Cmd(m_dma_rx, ENABLE);
 
@@ -183,6 +298,9 @@ void SimpleSerial::initDMA() {
 
 void SimpleSerial::initNVIC() {
     NVIC_InitTypeDef NVIC_InitStructure;
+    
+    // 配置中断优先级：抢占优先级3，子优先级0
+    // 确保串口中断不会干扰更高优先级的任务（如舵机PWM）
     NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 3;
     NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
     NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
@@ -192,15 +310,21 @@ void SimpleSerial::initNVIC() {
         case USART_ID:: USART1_ID:
             NVIC_InitStructure. NVIC_IRQChannel = USART1_IRQn;
             NVIC_Init(&NVIC_InitStructure);
-            NVIC_InitStructure.NVIC_IRQChannel = DMA1_Channel4_IRQn;
-            NVIC_Init(&NVIC_InitStructure);
+            // ✅ 只在有DMA TX时启用DMA中断
+            if (m_dma_tx) {
+                NVIC_InitStructure.NVIC_IRQChannel = DMA1_Channel4_IRQn;
+                NVIC_Init(&NVIC_InitStructure);
+            }
             break;
 
         case USART_ID::USART2_ID:
             NVIC_InitStructure. NVIC_IRQChannel = USART2_IRQn;
             NVIC_Init(&NVIC_InitStructure);
-            NVIC_InitStructure.NVIC_IRQChannel = DMA1_Channel7_IRQn;
-            NVIC_Init(&NVIC_InitStructure);
+            // ✅ 只在有DMA TX时启用DMA中断
+            if (m_dma_tx) {
+                NVIC_InitStructure.NVIC_IRQChannel = DMA1_Channel7_IRQn;
+                NVIC_Init(&NVIC_InitStructure);
+            }
             break;
 
         case USART_ID::USART3_ID:
@@ -208,6 +332,10 @@ void SimpleSerial::initNVIC() {
             NVIC_Init(&NVIC_InitStructure);
             // USART3 只用中断，不用 DMA TX
             break;
+            
+        default:
+            // ✅ 无效的USART_ID，不配置中断
+            return;
     }
 }
 

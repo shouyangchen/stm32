@@ -18,8 +18,8 @@ SimpleSerial::SimpleSerial(USART_ID id, uint32_t baud)
     , m_dma_rx(nullptr)
 {
     // ✅ 参数验证：检查波特率有效性
+    // 如果波特率无效，自动使用安全的默认值115200，确保初始化不会失败
     if (!validate_baudrate(baud)) {
-        // 波特率无效，使用默认值
         baud = 115200;
     }
     
@@ -197,8 +197,9 @@ void SimpleSerial::initUSART(uint32_t baud) {
     USART_Cmd(m_usart, ENABLE);
     
     // ✅ 调试日志：输出初始化参数（初始化完成后）
-    // 延迟一小段时间确保USART完全就绪
-    for (volatile int i = 0; i < 1000; i++);
+    // 短暂延迟确保USART完全就绪（约1ms @ 72MHz）
+    #define USART_INIT_DELAY_LOOPS 1000
+    for (volatile int i = 0; i < USART_INIT_DELAY_LOOPS; i++);
     
     serial_debug_print(m_usart, "\r\n=== USART Init ===\r\n");
     serial_debug_print(m_usart, "USART: ");

@@ -12,8 +12,12 @@ extern "C" {
 static void debug_putchar(char c) {
     // 尝试使用USART1输出（如果已初始化）
     if (USART1->CR1 & USART_CR1_UE) {  // 检查USART1是否启用
-        while (!(USART1->SR & USART_SR_TXE));  // 等待发送缓冲区空
-        USART1->DR = c;
+        // 等待发送缓冲区空，带超时保护避免硬件故障时死锁
+        uint32_t timeout = 10000;
+        while (!(USART1->SR & USART_SR_TXE) && timeout--);
+        if (timeout > 0) {
+            USART1->DR = c;
+        }
     }
 }
 

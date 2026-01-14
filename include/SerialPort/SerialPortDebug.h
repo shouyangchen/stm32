@@ -25,8 +25,10 @@ static inline void serial_debug_putchar(USART_TypeDef* usart, char c) {
     if (!(usart->CR1 & USART_CR1_UE)) return;  // USART未启用
     
     // 等待发送缓冲区空，带超时保护
+    // timeout递减到0表示超时，此时timeout--返回0使循环退出
     uint32_t timeout = SERIAL_DEBUG_TIMEOUT;
     while (!(usart->SR & USART_SR_TXE) && timeout--);
+    // 只有当没有超时(timeout>0)时才写入数据，避免在硬件故障时死锁
     if (timeout > 0) {
         usart->DR = c;
     }

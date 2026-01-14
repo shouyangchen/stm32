@@ -45,6 +45,10 @@ void SimpleSerial:: init(uint32_t baud) {
 }
 
 void SimpleSerial::initGPIO() {
+    // ✅ 修复：必须在配置 GPIO 之前启用 AFIO 时钟
+    // AFIO 时钟必须先于任何复用功能 GPIO 配置启用
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE);
+    
     GPIO_InitTypeDef GPIO_InitStructure;
     GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
 
@@ -94,9 +98,6 @@ void SimpleSerial::initGPIO() {
             GPIO_Init(GPIOB, &GPIO_InitStructure);
             break;
     }
-
-    // ✅ 关键：启用 AFIO，但在之后恢复 GPIO 配置
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE);
 }
 
 void SimpleSerial::initUSART(uint32_t baud) {

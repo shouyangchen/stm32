@@ -50,8 +50,8 @@ static inline void serial_debug_print_hex(USART_TypeDef* usart, uint32_t num) {
 }
 
 static inline void serial_debug_print_dec(USART_TypeDef* usart, uint32_t num) {
-    // Buffer para uint32_t decimal: max 10 dígitos + null terminator
-    #define DECIMAL_BUFFER_SIZE 12
+    // Buffer for uint32_t decimal: max 10 digits + null terminator
+    const int DECIMAL_BUFFER_SIZE = 12;
     char buf[DECIMAL_BUFFER_SIZE];
     int i = 0;
     
@@ -68,7 +68,6 @@ static inline void serial_debug_print_dec(USART_TypeDef* usart, uint32_t num) {
     while (i > 0) {
         serial_debug_putchar(usart, buf[--i]);
     }
-    #undef DECIMAL_BUFFER_SIZE
 }
 
 // 参数验证函数

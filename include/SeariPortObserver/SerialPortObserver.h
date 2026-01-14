@@ -2,8 +2,8 @@
 // Created by chenshouyang on 2026/1/12.
 //
 
-#ifndef SPLPROJECT_SEARIPORTOBSERVER_H
-#define SPLPROJECT_SEARIPORTOBSERVER_H
+#ifndef SERIALPORTOBSERVER_H
+#define SERIALPORTOBSERVER_H
 
 #include "Object.h"
 #include "SerialPort/SerialPort.h"
@@ -81,4 +81,4 @@ private:
     > m_observers;
 };
 
-#endif //SPLPROJECT_SEARIPORTOBSERVER_H
+#endif //SERIALPORTOBSERVER_H

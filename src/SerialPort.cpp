@@ -230,8 +230,17 @@ void SimpleSerial::sendData(const uint8_t* data, uint16_t len) {
         return;
     }
 
-    // 使用 DMA 发送（非阻塞）
-    while (m_tx_in_progress);  // 等待上一次传输完成
+    // 使用 DMA 发送（非阻塞，带超时保护）
+    uint32_t timeout = 10000;  // 超时计数
+    while (m_tx_in_progress && timeout > 0) {
+        timeout--;
+    }
+    
+    if (timeout == 0) {
+        // 超时，强制复位DMA状态
+        m_tx_in_progress = false;
+        DMA_Cmd(m_dma_tx, DISABLE);
+    }
     
     m_tx_in_progress = true;
     DMA_Cmd(m_dma_tx, DISABLE);
@@ -282,7 +291,7 @@ void SimpleSerial::parseAndPostMessage() {
     msg.source = (uint8_t)m_rx_buffer[0];
     msg.length = (uint8_t)m_rx_buffer[1];
     
-    // 检查消息长度是否有效
+    // 检查消息长度是否有效（最大254字节，因为data数组是254）
     if (msg.length > 254 || m_rx_count < (2 + msg.length)) {
         // 消息不完整或长度无效，等待更多数据
         return;

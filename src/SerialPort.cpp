@@ -198,8 +198,8 @@ void SimpleSerial::initUSART(uint32_t baud) {
     
     // ✅ 调试日志：输出初始化参数（初始化完成后）
     // 短暂延迟确保USART完全就绪（约1ms @ 72MHz）
-    #define USART_INIT_DELAY_LOOPS 1000
-    for (volatile int i = 0; i < USART_INIT_DELAY_LOOPS; i++);
+    static const uint32_t USART_INIT_DELAY_LOOPS = 1000;
+    for (volatile uint32_t i = 0; i < USART_INIT_DELAY_LOOPS; i++);
     
     serial_debug_print(m_usart, "\r\n=== USART Init ===\r\n");
     serial_debug_print(m_usart, "USART: ");
@@ -293,15 +293,10 @@ void SimpleSerial::initDMA() {
 void SimpleSerial::initNVIC() {
     NVIC_InitTypeDef NVIC_InitStructure;
     
-    // ✅ 参数验证：检查优先级配置（范围0-15）
-    uint8_t preemption_priority = 3;
-    uint8_t sub_priority = 0;
-    
-    if (preemption_priority > 15) preemption_priority = 3;
-    if (sub_priority > 15) sub_priority = 0;
-    
-    NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = preemption_priority;
-    NVIC_InitStructure.NVIC_IRQChannelSubPriority = sub_priority;
+    // 配置中断优先级：抢占优先级3，子优先级0
+    // 确保串口中断不会干扰更高优先级的任务（如舵机PWM）
+    NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 3;
+    NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
     NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
 
     // USART 中断
@@ -309,7 +304,7 @@ void SimpleSerial::initNVIC() {
         case USART_ID:: USART1_ID:
             NVIC_InitStructure. NVIC_IRQChannel = USART1_IRQn;
             NVIC_Init(&NVIC_InitStructure);
-            // 只在有DMA TX时启用DMA中断
+            // ✅ 只在有DMA TX时启用DMA中断
             if (m_dma_tx) {
                 NVIC_InitStructure.NVIC_IRQChannel = DMA1_Channel4_IRQn;
                 NVIC_Init(&NVIC_InitStructure);
@@ -319,7 +314,7 @@ void SimpleSerial::initNVIC() {
         case USART_ID::USART2_ID:
             NVIC_InitStructure. NVIC_IRQChannel = USART2_IRQn;
             NVIC_Init(&NVIC_InitStructure);
-            // 只在有DMA TX时启用DMA中断
+            // ✅ 只在有DMA TX时启用DMA中断
             if (m_dma_tx) {
                 NVIC_InitStructure.NVIC_IRQChannel = DMA1_Channel7_IRQn;
                 NVIC_Init(&NVIC_InitStructure);

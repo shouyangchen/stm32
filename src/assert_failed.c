@@ -9,11 +9,13 @@ extern "C" {
 #endif
 
 // 简单的调试输出函数（使用轮询方式发送，不依赖DMA）
+#define ASSERT_DEBUG_TIMEOUT 10000  // 超时保护：避免硬件故障时死锁
+
 static void debug_putchar(char c) {
     // 尝试使用USART1输出（如果已初始化）
     if (USART1->CR1 & USART_CR1_UE) {  // 检查USART1是否启用
         // 等待发送缓冲区空，带超时保护避免硬件故障时死锁
-        uint32_t timeout = 10000;
+        uint32_t timeout = ASSERT_DEBUG_TIMEOUT;
         while (!(USART1->SR & USART_SR_TXE) && timeout--);
         if (timeout > 0) {
             USART1->DR = c;

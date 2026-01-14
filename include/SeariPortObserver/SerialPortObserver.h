@@ -1,99 +1,84 @@
-// //
-// // Created by chenshouyang on 2026/1/12.
-// //
 //
-// #ifndef SPLPROJECT_SEARIPORTOBSERVER_H
-// #define SPLPROJECT_SEARIPORTOBSERVER_H
+// Created by chenshouyang on 2026/1/12.
 //
-// #include <memory>
-// #include <queue>
-// #include "Object.h"
-// #include <unordered_map>
-// #include <utility>
-// #include "SerialPort/SerialPort.h"
-// #include "singleton/Singleton.h"
-//
-// template<typename AllocatorType>
-// class SerialPort;
-//
-// // 观察者基类
-// class Observer :  public Object {
-// public:
-//     static constexpr ObjectType staticObjectType() {
-//         return ObjectType::Observer;
-//     }
-//
-//     explicit Observer(const uint8_t& priority, Object* parent = nullptr);
-//     void event(Event *event) override;
-//     virtual void processSerialData(const uint8_t*, size_t size) = 0;
-//     [[nodiscard]] const uint8_t& getPriority() const;
-//     ~Observer() override = default;
-//
-// private:
-//     uint8_t priority_m;
-// };
-//
-// struct ObserverCompare {
-//     bool operator()(Observer* lhs, Observer* rhs) const {
-//         if (! lhs || !rhs) return false;
-//         return lhs->getPriority() < rhs->getPriority();
-//     }
-// };
-//
-// // 串口观察者
-// class SerialPortObserver : public Object, public Singleton<SerialPortObserver> {
-// public:
-//     static constexpr ObjectType staticObjectType() {
-//         return ObjectType::SerialPortObserver;
-//     }
-//
-//     using MessageSource = SerialPort<>:: MessageSource;
-//     using SerialPortPtr = SerialPort<>*;
-//
-//     void event(Event *event) override;
-//     void notifyObservers();
-//
-//     void installObserver(const Observer* observer,
-//                         SerialPortId portId,
-//                         MessageSource source);
-//
-//     void deleteObserver(const Observer* observer,
-//                        SerialPortId portId,
-//                        MessageSource source);
-//
-//     void registerSerialPort(SerialPortId portId, SerialPortPtr port);
-//     void unregisterSerialPort(SerialPortId portId);
-//
-//     [[nodiscard]] bool getSerialPortState(SerialPortId portId) const;
-//
-//     ~SerialPortObserver() override = default;
-//
-// private:
-//     friend class Singleton<SerialPortObserver>;
-//     template<typename AllocatorType>
-//     friend class SerialPort;
-//
-//     SerialPortObserver();
-//
-//     void notifyQueueElements(SerialPortId portId, MessageSource source);
-//     void notify(SerialPortId portId, MessageSource source);
-//
-//     using ObserverKey = std::pair<SerialPortId, MessageSource>;
-//
-//     struct ObserverKeyHash {
-//         std::size_t operator()(const ObserverKey& key) const {
-//             return std::hash<uint8_t>()(static_cast<uint8_t>(key.first)) ^
-//                    (std::hash<uint8_t>()(static_cast<uint8_t>(key. second)) << 1);
-//         }
-//     };
-//
-//     std::unordered_map<SerialPortId, SerialPortPtr> m_serialPorts;
-//
-//     std::unordered_map<
-//         ObserverKey,
-//         std::priority_queue<Observer*, std::vector<Observer*, :: allocator<Observer*>>, ObserverCompare>,
-//         ObserverKeyHash
-//     > ObserverPriority_queue;
-// };
-//
-// #endif //SPLPROJECT_SEARIPORTOBSERVER_H
+
+#ifndef SPLPROJECT_SEARIPORTOBSERVER_H
+#define SPLPROJECT_SEARIPORTOBSERVER_H
+
+#include "Object.h"
+#include "SerialPort/SerialPort.h"
+#include "singleton/Singleton.h"
+#include <unordered_map>
+#include <queue>
+#include "Allocator/allocator.h"
+
+// 观察者基类 - 对串口消息感兴趣的对象继承此类
+class SerialObserver : public Object {
+public:
+    static constexpr ObjectType staticObjectType() {
+        return ObjectType::Observer;
+    }
+
+    explicit SerialObserver(uint8_t priority, Object* parent = nullptr);
+    
+    // 处理串口数据的纯虚函数
+    virtual void processSerialData(uint8_t portId, uint8_t source, const uint8_t* data, uint8_t len) = 0;
+    
+    void event(Event *event) override;
+    [[nodiscard]] uint8_t getPriority() const;
+    ~SerialObserver() override = default;
+
+private:
+    uint8_t priority_m;
+};
+
+// 观察者比较器（用于优先级队列）
+struct ObserverCompare {
+    bool operator()(SerialObserver* lhs, SerialObserver* rhs) const {
+        if (!lhs || !rhs) return false;
+        return lhs->getPriority() < rhs->getPriority();  // 数值越大优先级越高
+    }
+};
+
+// 串口观察者管理器 - 单例模式
+class SerialPortObserver : public Object, public Singleton<SerialPortObserver> {
+public:
+    static constexpr ObjectType staticObjectType() {
+        return ObjectType::SerialPortObserver;
+    }
+
+    void event(Event *event) override;
+
+    // 注册观察者到特定串口的特定消息源
+    void registerObserver(SerialObserver* observer, uint8_t portId, uint8_t messageSource);
+    
+    // 注销观察者
+    void unregisterObserver(SerialObserver* observer, uint8_t portId, uint8_t messageSource);
+    
+    // 分发接收到的消息给相关观察者
+    void dispatchMessage(uint8_t portId, uint8_t source, const uint8_t* data, uint8_t len);
+
+    ~SerialPortObserver() override = default;
+
+private:
+    friend class Singleton<SerialPortObserver>;
+    SerialPortObserver();
+
+    // 观察者键：(portId, messageSource)
+    using ObserverKey = std::pair<uint8_t, uint8_t>;
+
+    struct ObserverKeyHash {
+        std::size_t operator()(const ObserverKey& key) const {
+            return std::hash<uint8_t>()(key.first) ^ (std::hash<uint8_t>()(key.second) << 1);
+        }
+    };
+
+    // 观察者映射表
+    std::unordered_map<
+        ObserverKey,
+        std::priority_queue<SerialObserver*, std::vector<SerialObserver*, ::allocator<SerialObserver*>>, ObserverCompare>,
+        ObserverKeyHash
+    > m_observers;
+};
+
+#endif //SPLPROJECT_SEARIPORTOBSERVER_H

@@ -6,7 +6,6 @@
 #include "SerialPort/SerialPort.h"
 #include "stm32f10x_pwr.h"
 #include "SeariPortObserver/SerialPortObserver.h"
-#include "SerialPort/SerialPortHAL.h"
 
 extern "C" {
     extern volatile uint32_t uwTick;
@@ -19,11 +18,15 @@ static void changeState(void*arg) {
 SimpleSerial* serial1 = nullptr;
 SimpleSerial* serial2 = nullptr;
 SimpleSerial* serial3 = nullptr;
+SerialPortObserver* serialPortObserver = nullptr;
 
 void setupSerial() {
     serial1 = new SimpleSerial(SimpleSerial::USART_ID::USART1_ID, 115200);
     serial2 = new SimpleSerial(SimpleSerial::USART_ID::USART2_ID, 115200);
     serial3 = new SimpleSerial(SimpleSerial::USART_ID::USART3_ID, 115200);
+
+    // 初始化串口观察者管理器
+    serialPortObserver = &SerialPortObserver::getInstance();
 
     if (serial1) serial1->sendString("USART1 Ready!\r\n");
     if (serial2) serial2->sendString("USART2 Ready!\r\n");
@@ -34,9 +37,6 @@ void sendHeartbeat(void*) {
     if (serial1) serial1->sendString("Heartbeat from STM32!\r\n");
     Applications::addTimer(2000, 0, sendHeartbeat, nullptr);
 }
-
-
-// Removed unused initialization functions
 
 
 Applications* Applications::instance=nullptr;
@@ -88,24 +88,6 @@ int Applications::exec() {
             timerQueue->tick();
         }
         processEvent();
-
-        // 处理串口1接收
-        if (serial1 && serial1->received()) {
-            uint8_t b = serial1->readByte();
-            serial1->sendByte(b);  // 回显
-        }
-
-        // 处理串口2接收
-        if (serial2 && serial2->received()) {
-            uint8_t b = serial2->readByte();
-            serial2->sendByte(b);
-        }
-
-        // 处理串口3接收
-        if (serial3 && serial3->received()) {
-            uint8_t b = serial3->readByte();
-            serial3->sendByte(b);
-        }
     }
     return 0;
 }
@@ -119,6 +101,11 @@ void Applications::processEvent() {
         if (Event* event_m = eventQueue->dequeueEvent()) {
             if (event_m->getEventType() == Event::EventType_DeleteObject) {
                  delete event_m->getReciver();
+            } else if (event_m->getEventType() == Event::EventType_SerialProtReceive) {
+                // 串口接收事件，转发给SerialPortObserver处理
+                if (serialPortObserver) {
+                    serialPortObserver->event(event_m);
+                }
             } else {
                 if (const auto receiver = event_m->getReciver())
                     receiver->event(event_m);
@@ -165,6 +152,11 @@ void Applications::sleep(uint32_t delay) {
             if (Event* event_m = eventQueue->dequeueEvent()) {
                 if (event_m->getEventType() == Event::EventType_DeleteObject) {
                     delete event_m->getReciver();
+                } else if (event_m->getEventType() == Event::EventType_SerialProtReceive) {
+                    // 串口接收事件，转发给SerialPortObserver处理
+                    if (serialPortObserver) {
+                        serialPortObserver->event(event_m);
+                    }
                 } else {
                     if (const auto receiver = event_m->getReciver())
                         receiver->event(event_m);

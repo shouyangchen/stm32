@@ -240,6 +240,12 @@ void SimpleSerial::initDMA() {
             m_dma_tx = nullptr;  // 不用 DMA 发送
             m_dma_rx = DMA1_Channel3;
             break;
+            
+        default:
+            // ✅ 无效的USART_ID，不应该发生
+            m_dma_tx = nullptr;
+            m_dma_rx = nullptr;
+            return;
     }
     
     // ✅ 参数验证：确保DMA RX通道已正确分配
@@ -326,6 +332,10 @@ void SimpleSerial::initNVIC() {
             NVIC_Init(&NVIC_InitStructure);
             // USART3 只用中断，不用 DMA TX
             break;
+            
+        default:
+            // ✅ 无效的USART_ID，不配置中断
+            return;
     }
 }
 

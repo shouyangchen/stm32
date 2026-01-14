@@ -1,3 +1,29 @@
+/**
+ * @file SerialPort.h
+ * @brief STM32F10x 事件驱动串口系统
+ * 
+ * 基于DMA的非阻塞串口收发，支持消息协议解析和观察者模式
+ * 
+ * 消息格式: [源ID(1字节)][长度(1字节)][数据(N字节)]
+ * 
+ * 使用示例:
+ *   // 1. 创建观察者类
+ *   class MyObserver : public SerialObserver {
+ *       void processSerialData(uint8_t portId, uint8_t source, 
+ *                             const uint8_t* data, uint8_t len) override {
+ *           // 处理接收到的数据
+ *       }
+ *   };
+ * 
+ *   // 2. 注册观察者
+ *   MyObserver* obs = new MyObserver();
+ *   SerialPortObserver::getInstance().registerObserver(obs, 1, 0x01);
+ * 
+ *   // 3. 发送数据
+ *   uint8_t msg[] = {0x01, 0x05, 'H', 'e', 'l', 'l', 'o'};
+ *   serial1->sendData(msg, sizeof(msg));
+ */
+
 #ifndef SIMPLE_SERIAL_H
 #define SIMPLE_SERIAL_H
 
